@@ -1,0 +1,572 @@
+{
+  "name": "Stok Kontrol ve Kritik Stok Uyarı Sistemi",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -32,
+        -144
+      ],
+      "id": "3ceeb91a-92dc-42ca-a705-47b68d2ca6ae",
+      "name": "When clicking ‘Execute workflow’"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 4
+          },
+          "conditions": [
+            {
+              "id": "edfed2ff-48a8-488c-b0d7-25445cf5b1c6",
+              "leftValue": "={{ (typeof $json.malzeme_kodu === 'string' && $json.malzeme_kodu.trim() !== '' && typeof $json.mevcut_stok === 'number' && Number.isFinite($json.mevcut_stok) && $json.mevcut_stok >= 0 && typeof $json.kritik_seviye === 'number' && Number.isFinite($json.kritik_seviye) && $json.kritik_seviye >= 0) ? 'GECERLI' : 'HATALI' }}",
+              "rightValue": "GECERLI",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.4,
+      "position": [
+        448,
+        0
+      ],
+      "id": "387cd65b-3852-4888-b1d3-8f29c5321c03",
+      "name": "Veri geçerli mi?"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "bf6c9321-00a9-44ad-a16f-32326aa48f06",
+              "name": "durum",
+              "value": "HATALI VERI",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        656,
+        176
+      ],
+      "id": "12d79e26-3274-4fdd-bbf8-3373312fb650",
+      "name": "Hatali Veri Kaydi"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 4
+          },
+          "conditions": [
+            {
+              "id": "1e6c1fe8-3720-4398-9b1a-cd32bf29f582",
+              "leftValue": "={{ $json.mevcut_stok }}",
+              "rightValue": "={{ $json.kritik_seviye }}",
+              "operator": {
+                "type": "number",
+                "operation": "lte"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.4,
+      "position": [
+        656,
+        -208
+      ],
+      "id": "ba7efda9-86bf-4936-8fb0-68b5ee4de1af",
+      "name": "Stok Kritik mi?"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "11d06677-0ac7-4d6c-901c-94ea09062240",
+              "name": "durum",
+              "value": "KRITIK STOK",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        896,
+        -304
+      ],
+      "id": "ee621159-e8f1-4f8d-9e96-754899097f67",
+      "name": "Kritik Stok Uyarisi"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "1accb7b4-e21c-49f9-868e-410a111d9bb5",
+              "name": "durum",
+              "value": "NORMAL STOK",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        896,
+        -144
+      ],
+      "id": "c1939eba-c9d3-4c4a-9083-9fd8fdad51fc",
+      "name": "Normal Stok Kaydi"
+    },
+    {
+      "parameters": {
+        "numberInputs": 3
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        1136,
+        -192
+      ],
+      "id": "6e50b375-aac0-4d52-829f-3669738b1b1e",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst kayitlar = $input.all().map(item => item.json);\n\n// Duruma göre malzemeleri ayır\nconst kritik = kayitlar.filter(\n  m => m.durum === \"KRITIK STOK\"\n);\n\nconst normal = kayitlar.filter(\n  m => m.durum === \"NORMAL STOK\"\n);\n\nconst hatali = kayitlar.filter(\n  m => m.durum === \"HATALI VERI\"\n);\n\n// Eksik veya tanımsız durumları kontrol et\nif (\n  kritik.length + normal.length + hatali.length\n  !== kayitlar.length\n) {\n  throw new Error(\"Eksik veya tanimsiz durum var!\");\n}\n\n// Kritik stok mesajlarını hazırla\nconst uyarilar = kritik.map(m =>\n  `${m.malzeme_kodu}: Mevcut ${m.mevcut_stok}, Kritik ${m.kritik_seviye}`\n);\n\n// Özet raporu oluştur\nconst rapor = {\n  toplam_malzeme: kayitlar.length,\n  kritik_sayisi: kritik.length,\n  normal_sayisi: normal.length,\n  hatali_sayisi: hatali.length,\n  kritik_malzemeler: kritik.map(m => m.malzeme_kodu),\n  hatali_malzemeler: hatali.map(m => m.malzeme_kodu),\n  uyari_mesaji: uyarilar.join(\"\\n\")\n};\n\nreturn [{ json: rapor }];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1360,
+        -192
+      ],
+      "id": "8ce53d82-6dce-4f8e-ac46-b446031a27f1",
+      "name": "Ozet Rapor Olustur"
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "RESELECT_TABLE_IN_N8N",
+          "mode": "list",
+          "cachedResultName": "Stok_Verileri"
+        },
+        "returnAll": true
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        224,
+        0
+      ],
+      "id": "99087b13-15e9-4db3-9514-70d5aa76554e",
+      "name": "Stok Verilerini Oku"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 9
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        -32,
+        0
+      ],
+      "id": "94500a07-c6e6-4dc0-9407-29f229663aa4",
+      "name": "Gunluk Stok Kontrol"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 4
+          },
+          "conditions": [
+            {
+              "id": "099733b1-2d68-467a-829d-9b9b3042db81",
+              "leftValue": "={{ $json.kritik_sayisi }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.4,
+      "position": [
+        1584,
+        -192
+      ],
+      "id": "37545489-7bb0-40b6-b180-00217de0fc9f",
+      "name": "Kritik Stok Var mi?"
+    },
+    {
+      "parameters": {
+        "dataTableId": {
+          "__rl": true,
+          "value": "RESELECT_TABLE_IN_N8N",
+          "mode": "list",
+          "cachedResultName": "Stok_Bildirimleri"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "tarih": "={{ $now.toISO() }}",
+            "durum": "KRITIK STOK",
+            "kritik_sayisi": "={{ $json.kritik_sayisi }}",
+            "hatali_sayisi": "={{ $json.hatali_sayisi }}",
+            "mesaj": "={{ $json.uyari_mesaji }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "tarih",
+              "displayName": "tarih",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "durum",
+              "displayName": "durum",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "kritik_sayisi",
+              "displayName": "kritik_sayisi",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "hatali_sayisi",
+              "displayName": "hatali_sayisi",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "mesaj",
+              "displayName": "mesaj",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        1712,
+        -288
+      ],
+      "id": "f8f8791b-8e7a-4523-92a9-ba0d56f28c83",
+      "name": "Kritik Stok Bildirimi"
+    },
+    {
+      "parameters": {
+        "dataTableId": {
+          "__rl": true,
+          "value": "RESELECT_TABLE_IN_N8N",
+          "mode": "list",
+          "cachedResultName": "Stok_Bildirimleri"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "tarih": "={{ $now.toISO() }}",
+            "durum": "KRITIK STOK YOK",
+            "kritik_sayisi": "={{ $json.kritik_sayisi }}",
+            "hatali_sayisi": "={{ $json.hatali_sayisi }}",
+            "mesaj": "={{ 'Kritik stok bulunmuyor. Hatali veri sayisi: ' + $json.hatali_sayisi }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "tarih",
+              "displayName": "tarih",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "durum",
+              "displayName": "durum",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "kritik_sayisi",
+              "displayName": "kritik_sayisi",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "hatali_sayisi",
+              "displayName": "hatali_sayisi",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "mesaj",
+              "displayName": "mesaj",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        1744,
+        -80
+      ],
+      "id": "ea378c83-d5ff-4243-b29a-bb97287bbb1d",
+      "name": "Kritik Stok Yok Kaydi"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        [
+          {
+            "node": "Stok Verilerini Oku",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Veri geçerli mi?": {
+      "main": [
+        [
+          {
+            "node": "Stok Kritik mi?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Hatali Veri Kaydi",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Stok Kritik mi?": {
+      "main": [
+        [
+          {
+            "node": "Kritik Stok Uyarisi",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Normal Stok Kaydi",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Kritik Stok Uyarisi": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normal Stok Kaydi": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Hatali Veri Kaydi": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Ozet Rapor Olustur",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Stok Verilerini Oku": {
+      "main": [
+        [
+          {
+            "node": "Veri geçerli mi?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gunluk Stok Kontrol": {
+      "main": [
+        [
+          {
+            "node": "Stok Verilerini Oku",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ozet Rapor Olustur": {
+      "main": [
+        [
+          {
+            "node": "Kritik Stok Var mi?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Kritik Stok Var mi?": {
+      "main": [
+        [
+          {
+            "node": "Kritik Stok Bildirimi",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Kritik Stok Yok Kaydi",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "nodeGroups": [],
+  "tags": []
+}
